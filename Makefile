@@ -1,2 +1,2 @@
-build: netcap.o
-	gcc netcap.c -o netcap
+build: netcap.o smon.o
+	gcc netcap.c smon.c -o netcap

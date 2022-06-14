@@ -1,29 +1,9 @@
 #include "netcap.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/ioctl.h>
-#include <linux/if_ether.h>
-#include <linux/filter.h>
-#include <net/if.h>
-#include <arpa/inet.h>
-#include <getopt.h>
-#include <signal.h>
-
-#include <netinet/ip.h>
-
-#define BUF_SIZE 65536
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-
-static volatile uint8_t run = 1;
+#include "smon.h"
 
 void intHandler(int dummy) { run = 0; }
 
-int main(int argc, char *const *argv)
+int main(int argc, char *const argv[])
 {
     int socket, opt;
     char *iface = calloc(1, sizeof(char));
@@ -41,54 +21,29 @@ int main(int argc, char *const *argv)
         }
     }
 
-    unsigned char *buffer = malloc(BUF_SIZE);
-
     if ((socket = create_socket(iface)) < 0)
         exit(errno);
 
-    uint32_t data_size, icmp = 0, igmp = 0, tcp = 0, udp = 0, unknown = 0;
+    smon _smon = {
+        .socket = socket,
+        .icmp = 0,
+        .igmp = 0,
+        .tcp = 0,
+        .udp = 0,
+        .unknown = 0,
+    };
+    smon *Smon = &_smon;
+
     signal(SIGINT, intHandler);
     while (run)
     {
-        data_size = recvfrom(socket, buffer, BUF_SIZE, 0, NULL, NULL);
-
-        /* Check to see if the packet contains at least
-         * complete Ethernet (14), IP (20) and TCP/UDP
-         * (8) headers.
-         */
-        if (data_size < 42)
-        {
-            perror("recvfrom():");
-            printf("Incomplete packet (errno is %d)\n", errno);
-            close(socket);
-            exit(0);
-        }
-
-        // +14 due to the 802.3 Ethernet frame
-        struct iphdr *iph = (struct iphdr *)(buffer + 14);
-        switch (iph->protocol)
-        {
-        case 1:
-            icmp++;
+        if (loop(Smon) != 0)
             break;
-        case 2:
-            igmp++;
-            break;
-        case 6:
-            tcp++;
-            break;
-        case 17:
-            udp++;
-            break;
-        default:
-            unknown++;
-            break;
-        }
-        printf("\rICMP: %d IGMP: %d, TCP: %d, UDP: %d, Unknown: %d", icmp, igmp, tcp, udp, unknown);
+        printf("\rICMP: %d IGMP: %d, TCP: %d, UDP: %d, Unknown: %d", Smon->icmp, Smon->igmp, Smon->tcp, Smon->udp, Smon->unknown);
         fflush(stdout);
     }
-    printf("\nCleaning up...\n");
 
+    printf("\nCleaning up...\n");
     close(socket);
 
     return 0;
