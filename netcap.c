@@ -1,3 +1,4 @@
+#include "netcap.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,13 +21,12 @@
 
 static volatile uint8_t run = 1;
 
-int create_socket(char const *iface);
 void intHandler(int dummy) { run = 0; }
 
 int main(int argc, char *const *argv)
 {
     int socket, opt;
-    char *iface;
+    char *iface = calloc(1, sizeof(char));
     while ((opt = getopt(argc, argv, "i:")) != -1)
     {
         switch (opt)
@@ -133,8 +133,11 @@ int create_socket(char const *iface)
     particular interface, and I'm not sure how I set up
     promiscuous mode without an interface name
     */
-    if (strcmp(iface, "*") == 0)
+    if (strcmp(iface, "") == 0)
+    {
+        printf("Socket created listening on all interfaces\n");
         return sock;
+    }
 
     if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, iface, strlen(iface)) < 0)
     {
