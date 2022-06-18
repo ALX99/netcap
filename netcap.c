@@ -1,4 +1,5 @@
 #include "netcap.h"
+#include "ansi.h"
 #include "smon.h"
 
 void intHandler(int dummy) { run = 0; }
@@ -7,7 +8,8 @@ int main(int argc, char *const argv[])
 {
     int socket, opt;
     char *iface = calloc(1, sizeof(char));
-    while ((opt = getopt(argc, argv, "i:")) != -1)
+    uint8_t verbose = 0;
+    while ((opt = getopt(argc, argv, "i:v")) != -1)
     {
         switch (opt)
         {
@@ -16,6 +18,9 @@ int main(int argc, char *const argv[])
             iface = malloc(str_len);
             strncpy(iface, optarg, str_len);
             break;
+        case 'v':;
+            verbose = 1;
+            break;
         default:
             break;
         }
@@ -23,27 +28,39 @@ int main(int argc, char *const argv[])
 
     if ((socket = create_socket(iface)) < 0)
         exit(errno);
-
-    smon _smon = {
-        .socket = socket,
-        .icmp = 0,
-        .igmp = 0,
-        .tcp = 0,
-        .udp = 0,
-        .unknown = 0,
-    };
+    smon _smon = new_smon();
+    _smon.socket = socket;
+    _smon.verbose = verbose;
+    _smon.icmp = 0;
+    _smon.igmp = 0;
+    _smon.tcp = 0;
+    _smon.udp = 0;
+    _smon.unknown = 0;
     smon *Smon = &_smon;
 
+    if (verbose)
+        ansi_clear();
     signal(SIGINT, intHandler);
     while (run)
     {
         if (loop(Smon) != 0)
             break;
+
+        if (verbose)
+        {
+            ansi_save();
+            ansi_goto(0, 0);
+        }
         printf("\rICMP: %d IGMP: %d, TCP: %d, UDP: %d, Unknown: %d", Smon->icmp, Smon->igmp, Smon->tcp, Smon->udp, Smon->unknown);
-        fflush(stdout);
+        if (verbose)
+            ansi_restore();
+        else
+            fflush(stdout);
     }
 
     printf("\nCleaning up...\n");
+    free(Smon->src_buf);
+    free(Smon->dst_buf);
     close(socket);
 
     return 0;

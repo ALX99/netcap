@@ -1,2 +1,4 @@
-build: netcap.o smon.o
-	gcc netcap.c smon.c -o netcap
+SRC=$(wildcard *.c)
+
+build: $(SRC)
+	gcc $^ -o netcap
